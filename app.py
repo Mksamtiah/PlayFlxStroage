@@ -48,6 +48,10 @@ def get_readable_file_size(size):
     while size >= power and n < 4: size /= power; n += 1
     return f"{size:.2f} {labels[n]}"
 
+# =====================================================================================
+# BOT COMMANDS
+# =====================================================================================
+
 @bot.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     if len(message.command) > 1 and message.command[1].startswith("verify_"):
@@ -55,10 +59,14 @@ async def start(client, message):
         link = f"{Config.BASE_URL}/show/{uid}"
         await message.reply(f"✅ **Link Ready!**\n🔗 `{link}`", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📂 Open", url=link)]]), disable_web_page_preview=True)
         return
-    await message.reply(f"👋 **Hello {message.from_user.first_name}!**\n\n📤 Send file = Get permanent link!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🌐 Web Upload", url=f"{Config.BASE_URL}/upload")],[InlineKeyboardButton("📁 All Files", url=f"{Config.BASE_URL}/files")]]))
+    await message.reply(f"👋 **Hello {message.from_user.first_name}!**\n\n📤 Send file = Get permanent link!\n🌐 Or use /upload page", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🌐 Web Upload", url=f"{Config.BASE_URL}/upload")],[InlineKeyboardButton("📁 All Files", url=f"{Config.BASE_URL}/files")]]))
 
 @bot.on_message(filters.command("ping"))
 async def ping(client, message): await message.reply("🏓 Pong!")
+
+# =====================================================================================
+# FILE HANDLERS
+# =====================================================================================
 
 @bot.on_message(filters.private & (filters.document | filters.video | filters.audio))
 async def user_file(client, message):
@@ -82,8 +90,12 @@ async def channel_file(client, message):
     link = f"{Config.BASE_URL}/show/{uid}"
     await message.reply(f"✅ **Link Generated!**\n📄 `{media.file_name or 'Unknown'}`\n🔗 `{link}`", disable_web_page_preview=True)
 
+# =====================================================================================
+# WEB ROUTES
+# =====================================================================================
+
 @app.api_route("/", methods=["GET","HEAD"])
-async def home(): return JSONResponse({"status":"ok"})
+async def home(): return JSONResponse({"status":"ok","message":"PlayFlx Server Running ✅"})
 
 @app.get("/show/{uid}", response_class=HTMLResponse)
 async def show(request: Request, uid: str):
@@ -144,43 +156,70 @@ async def download(mid: int, fname: str, request: Request):
     except HTTPException: raise
     except Exception as e: raise HTTPException(500)
 
+# =====================================================================================
+# UPLOAD PAGE
+# =====================================================================================
+
 @app.get("/upload", response_class=HTMLResponse)
 async def upload_page(request: Request):
-    return HTMLResponse(content="""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Upload - PlayFlx</title><script src="https://cdn.tailwindcss.com"></script><style>body{background:#0a0a0a;color:white;font-family:system-ui}.upload-box{border:2px dashed #6366f1;border-radius:16px;padding:40px;text-align:center;cursor:pointer}.upload-box:hover{border-color:#818cf8;background:rgba(99,102,241,.05)}.btn{background:#6366f1;color:white;padding:12px 30px;border-radius:8px;font-weight:600;cursor:pointer;border:none}.btn:hover{background:#4f46e5}.link-input{background:#1a1a1a;border:1px solid #333;color:white;padding:12px;border-radius:8px;width:100%;font-family:monospace}</style></head><body class="min-h-screen flex flex-col"><header class="p-6 text-center"><h1 class="text-3xl font-bold text-indigo-400">📤 PlayFlx Upload</h1></header><main class="flex-grow flex items-center justify-center px-4"><div class="max-w-xl w-full"><div class="upload-box" id="dropZone"><p class="text-5xl mb-4">📁</p><p class="text-xl font-semibold">Drop file or click to upload</p><input type="file" id="fileInput" class="hidden" onchange="uploadFile()"></div><div id="progress" class="mt-4 text-center" style="display:none"><div class="bg-gray-800 rounded-full h-4 mb-2"><div id="progressBar" class="bg-indigo-500 h-4 rounded-full" style="width:0%"></div></div><p id="progressText" class="text-gray-400">Uploading...</p></div><div id="result" class="mt-6 bg-gray-900 rounded-xl p-6" style="display:none"><p class="text-green-400 font-semibold mb-3">✅ Upload Complete!</p><div class="flex gap-2 mt-1"><input type="text" id="linkInput" class="link-input" readonly><button class="btn" onclick="copyLink()">Copy</button></div><div class="flex gap-2 mt-3"><a id="openLink" href="#" target="_blank" class="btn text-center flex-1">Open</a><button class="btn" onclick="location.reload()" style="background:#333">Upload More</button></div></div></div></main><script>const dropZone=document.getElementById('dropZone'),fileInput=document.getElementById('fileInput'),progress=document.getElementById('progress'),result=document.getElementById('result'),progressBar=document.getElementById('progressBar'),progressText=document.getElementById('progressText'),linkInput=document.getElementById('linkInput'),openLink=document.getElementById('openLink');dropZone.addEventListener('click',()=>fileInput.click());dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.style.borderColor='#818cf8'});dropZone.addEventListener('dragleave',()=>{dropZone.style.borderColor='#6366f1'});dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.style.borderColor='#6366f1';if(e.dataTransfer.files.length){fileInput.files=e.dataTransfer.files;uploadFile()}});async function uploadFile(){const file=fileInput.files[0];if(!file)return;const formData=new FormData();formData.append('file',file);result.style.display='none';progress.style.display='block';dropZone.style.display='none';const xhr=new XMLHttpRequest();xhr.upload.addEventListener('progress',e=>{if(e.lengthComputable){const p=Math.round((e.loaded/e.total)*100);progressBar.style.width=p+'%';progressText.textContent='Uploading... '+p+'%'}});xhr.addEventListener('load',()=>{progress.style.display='none';if(xhr.status===200){const data=JSON.parse(xhr.responseText);linkInput.value=data.link;openLink.href=data.link;result.style.display='block'}else{alert('Upload failed!');dropZone.style.display='block'}});xhr.addEventListener('error',()=>{progress.style.display='none';dropZone.style.display='block';alert('Error!')});xhr.open('POST','/upload/file');xhr.send(formData)}function copyLink(){linkInput.select();document.execCommand('copy');alert('✅ Copied!')}</script></body></html>""")
+    return HTMLResponse(content="""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Upload - PlayFlx</title><script src="https://cdn.tailwindcss.com"></script><style>body{background:#0a0a0a;color:white;font-family:system-ui}.upload-box{border:2px dashed #6366f1;border-radius:16px;padding:40px;text-align:center;cursor:pointer}.upload-box:hover{border-color:#818cf8;background:rgba(99,102,241,.05)}.btn{background:#6366f1;color:white;padding:12px 30px;border-radius:8px;font-weight:600;cursor:pointer;border:none}.btn:hover{background:#4f46e5}.link-input{background:#1a1a1a;border:1px solid #333;color:white;padding:12px;border-radius:8px;width:100%;font-family:monospace}</style></head><body class="min-h-screen flex flex-col"><header class="p-6 text-center"><h1 class="text-3xl font-bold text-indigo-400">📤 PlayFlx Upload</h1><p class="text-gray-400 mt-2">Upload files & get permanent links</p></header><main class="flex-grow flex items-center justify-center px-4"><div class="max-w-xl w-full"><div class="upload-box" id="dropZone"><p class="text-5xl mb-4">📁</p><p class="text-xl font-semibold mb-2">Drop file here or click to upload</p><p class="text-gray-400 text-sm">Max 2GB • Video, Document, Audio</p><input type="file" id="fileInput" class="hidden" onchange="uploadFile()"></div><div id="progress" class="mt-4 text-center" style="display:none"><div class="bg-gray-800 rounded-full h-4 mb-2"><div id="progressBar" class="bg-indigo-500 h-4 rounded-full" style="width:0%"></div></div><p id="progressText" class="text-gray-400">Uploading...</p></div><div id="result" class="mt-6 bg-gray-900 rounded-xl p-6" style="display:none"><p class="text-green-400 font-semibold mb-3">✅ Upload Complete!</p><label class="text-sm text-gray-400">Permanent Link:</label><div class="flex gap-2 mt-1"><input type="text" id="linkInput" class="link-input" readonly><button class="btn" onclick="copyLink()">Copy</button></div><div class="flex gap-2 mt-3"><a id="openLink" href="#" target="_blank" class="btn text-center flex-1">Open</a><button class="btn" onclick="location.reload()" style="background:#333">Upload More</button></div></div></div></main><footer class="p-4 text-center text-gray-500 text-sm">© 2025 PlayFlx</footer><script>const dropZone=document.getElementById('dropZone'),fileInput=document.getElementById('fileInput'),progress=document.getElementById('progress'),result=document.getElementById('result'),progressBar=document.getElementById('progressBar'),progressText=document.getElementById('progressText'),linkInput=document.getElementById('linkInput'),openLink=document.getElementById('openLink');dropZone.addEventListener('click',()=>fileInput.click());dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.style.borderColor='#818cf8'});dropZone.addEventListener('dragleave',()=>{dropZone.style.borderColor='#6366f1'});dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.style.borderColor='#6366f1';if(e.dataTransfer.files.length){fileInput.files=e.dataTransfer.files;uploadFile()}});async function uploadFile(){const file=fileInput.files[0];if(!file)return;const formData=new FormData();formData.append('file',file);result.style.display='none';progress.style.display='block';dropZone.style.display='none';const xhr=new XMLHttpRequest();xhr.upload.addEventListener('progress',e=>{if(e.lengthComputable){const p=Math.round((e.loaded/e.total)*100);progressBar.style.width=p+'%';progressText.textContent='Uploading... '+p+'%'}});xhr.addEventListener('load',()=>{progress.style.display='none';if(xhr.status===200){const data=JSON.parse(xhr.responseText);linkInput.value=data.link;openLink.href=data.link;result.style.display='block'}else{alert('Upload failed!');dropZone.style.display='block'}});xhr.addEventListener('error',()=>{progress.style.display='none';dropZone.style.display='block';alert('Error!')});xhr.open('POST','/upload/file');xhr.send(formData)}function copyLink(){linkInput.select();document.execCommand('copy');alert('✅ Copied!')}</script></body></html>""")
 
 @app.post("/upload/file")
 async def upload_api(file: UploadFile = File(...)):
     try:
         temp = f"/tmp/{uuid.uuid4()}_{file.filename}"
         with open(temp,"wb") as f: shutil.copyfileobj(file.file, f)
-        sent = await bot.send_document(Config.STORAGE_CHANNEL, temp, file_name=file.filename)
+        sent = await asyncio.wait_for(bot.send_document(Config.STORAGE_CHANNEL, temp, file_name=file.filename), timeout=120)
         os.remove(temp)
         uid = secrets.token_urlsafe(8)
         await db.save_link(uid, sent.id)
         return JSONResponse({"success":True,"link":f"{Config.BASE_URL}/show/{uid}"})
+    except asyncio.TimeoutError:
+        return JSONResponse({"error":"Upload timeout. Try smaller file."}, status_code=408)
     except Exception as e: raise HTTPException(500, detail=str(e))
+
+# =====================================================================================
+# FILES GALLERY (FIXED)
+# =====================================================================================
 
 @app.get("/files", response_class=HTMLResponse)
 async def files_gallery(request: Request):
     try:
         msgs = []
-        async for m in bot.get_chat_history(Config.STORAGE_CHANNEL, limit=100):
-            if m.document or m.video or m.audio: msgs.append(m)
-        if not msgs: return HTMLResponse("<html><head><link href='https://cdn.jsdelivr.net/npm/bootswatch@5.0.0/dist/darkly/bootstrap.min.css' rel='stylesheet'></head><body class='text-center mt-5 text-white bg-dark'><h1>📂 No files!</h1><a href='/upload' class='btn btn-primary mt-3'>Upload</a></body></html>")
+        async for m in bot.get_chat_history(Config.STORAGE_CHANNEL, limit=20):
+            if m.document or m.video or m.audio:
+                msgs.append(m)
+        
+        if not msgs:
+            return HTMLResponse(content="""<!DOCTYPE html><html><head><link href='https://cdn.jsdelivr.net/npm/bootswatch@5.0.0/dist/darkly/bootstrap.min.css' rel='stylesheet'></head><body class='text-center mt-5 text-white bg-dark'><h1>📂 No files yet!</h1><p>Upload files to @playflx channel or use /upload page</p><a href='/upload' class='btn btn-primary mt-3'>Upload Now</a></body></html>""")
+        
         cards = ""
-        for m in msgs:
-            media = m.document or m.video or m.audio
-            fn = media.file_name or "Unknown"
-            fs = get_readable_file_size(media.file_size) if media.file_size else "N/A"
-            mt = media.mime_type or ""
-            icon = "🎬" if mt.startswith("video/") else "🎵" if mt.startswith("audio/") else "📄"
-            uid = secrets.token_urlsafe(8)
-            await db.save_link(uid, m.id)
-            show = f"{Config.BASE_URL}/show/{uid}"
-            dl = f"{Config.BASE_URL}/dl/{m.id}/{fn}"
-            cards += f"""<div class="col-lg-3 col-md-4 col-sm-6 mb-4"><div class="card bg-dark border-secondary h-100"><div class="card-img-top d-flex align-items-center justify-content-center" style="height:160px;background:#111;font-size:50px;">{icon}</div><div class="card-body"><h6 class="card-title text-truncate" title="{fn}">{fn}</h6><p class="card-text small text-muted">📦 {fs}</p><a href="{show}" class="btn btn-sm btn-primary" target="_blank">👁 View</a><a href="{dl}" class="btn btn-sm btn-success">⬇ DL</a><button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText('{dl}');alert('✅ Copied!')">📋</button></div></div></div>"""
-        return HTMLResponse(content=f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Files - PlayFlx</title><link href="https://cdn.jsdelivr.net/npm/bootswatch@5.0.0/dist/darkly/bootstrap.min.css" rel="stylesheet"><style>body{{background:#0a0a0a;color:white}}.navbar{{background:#1a1a1a!important;border-bottom:2px solid #6366f1}}.card{{transition:transform .3s,box-shadow .3s}}.card:hover{{transform:translateY(-5px);box-shadow:0 10px 30px rgba(99,102,241,.3)}}</style></head><body><nav class="navbar navbar-expand-lg sticky-top"><div class="container-fluid"><a class="navbar-brand" href="/" style="color:#6366f1!important;font-weight:bold">📂 PlayFlx Files</a><span class="navbar-text text-light">📹 {len(msgs)} files</span><a href="/upload" class="btn btn-primary btn-sm">📤 Upload</a></div></nav><div class="container py-4"><h1 class="mb-4">📁 All Files</h1><div class="row">{cards}</div></div></body></html>""")
-    except Exception as e: raise HTTPException(500)
+        for m in msgs[:20]:
+            try:
+                media = m.document or m.video or m.audio
+                fn = media.file_name or "Unknown"
+                fs = get_readable_file_size(media.file_size) if media.file_size else "N/A"
+                mt = media.mime_type or ""
+                icon = "🎬" if mt.startswith("video/") else "🎵" if mt.startswith("audio/") else "📄"
+                uid = secrets.token_urlsafe(8)
+                await db.save_link(uid, m.id)
+                show = f"{Config.BASE_URL}/show/{uid}"
+                dl = f"{Config.BASE_URL}/dl/{m.id}/{fn}"
+                cards += f"""<div class="col-lg-3 col-md-4 col-sm-6 mb-4"><div class="card bg-dark border-secondary h-100"><div class="card-img-top d-flex align-items-center justify-content-center" style="height:160px;background:#111;font-size:50px;">{icon}</div><div class="card-body"><h6 class="card-title text-truncate" title="{fn}">{fn[:50]}</h6><p class="card-text small text-muted">📦 {fs}</p><a href="{show}" class="btn btn-sm btn-primary" target="_blank">👁 View</a><a href="{dl}" class="btn btn-sm btn-success">⬇ DL</a></div></div></div>"""
+            except Exception as e:
+                print(f"Skipping message {m.id}: {e}")
+        
+        html = f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Files - PlayFlx</title><link href="https://cdn.jsdelivr.net/npm/bootswatch@5.0.0/dist/darkly/bootstrap.min.css" rel="stylesheet"><style>body{{background:#0a0a0a;color:white}}.navbar{{background:#1a1a1a!important;border-bottom:2px solid #6366f1}}.card{{transition:transform .3s}}.card:hover{{transform:translateY(-5px);box-shadow:0 10px 30px rgba(99,102,241,.3)}}.btn-primary{{background:#6366f1;border-color:#6366f1}}.btn-success{{background:#22c55e;border-color:#22c55e}}</style></head><body><nav class="navbar navbar-expand-lg sticky-top"><div class="container-fluid"><a class="navbar-brand" href="/" style="color:#6366f1!important;font-weight:bold">📂 PlayFlx Files</a><span class="navbar-text text-light">📹 {len(msgs)} files</span><a href="/upload" class="btn btn-primary btn-sm">📤 Upload</a></div></nav><div class="container py-4"><h1 class="mb-4">📁 All Files</h1><div class="row">{cards}</div></div></body></html>"""
+        
+        return HTMLResponse(content=html)
+        
+    except Exception as e:
+        print(f"❌ Gallery Error: {traceback.format_exc()}")
+        return HTMLResponse(content=f"""<!DOCTYPE html><html><head><link href='https://cdn.jsdelivr.net/npm/bootswatch@5.0.0/dist/darkly/bootstrap.min.css' rel='stylesheet'></head><body class='text-center mt-5 text-white bg-dark'><h1>📂 Error loading files</h1><p>{str(e)}</p><a href='/upload' class='btn btn-primary mt-3'>Upload</a></body></html>""", status_code=500)
+
+# =====================================================================================
+# START
+# =====================================================================================
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="0.0.0.0", port=int(os.environ.get("PORT",10000)), log_level="info")
+    uvicorn.run("app:app", host="0.0.0.0", port=int(os.environ.get("PORT",10000)), log_level="info", timeout_keep_alive=300)
